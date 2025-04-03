@@ -22,7 +22,7 @@ public class FlyToPlugin : BasePlugin
     }
 
     [ConsoleCommand("css_flyto", "Teleport to a teammate after a new round starts")]
-    [CommandHelper(minArgs: 1, usage: "Expect name of player", whoCanExecute: CommandUsage.CLIENT_ONLY)]
+    [CommandHelper(minArgs: 1, usage: "Expect name of alive human player", whoCanExecute: CommandUsage.CLIENT_ONLY)]
     public void FlyToCommand(CCSPlayerController? player, CommandInfo commandInfo)
     {
         // Check if the player is valid
@@ -39,6 +39,13 @@ public class FlyToPlugin : BasePlugin
             return;
         }
 
+        // Check if the player is a alive human
+        if (player.PawnIsAlive == false)
+        {
+            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}You are not alive.");
+            return;
+        }
+
         // Check time available for human can use this command
         if (CanUseFlyTo() == false)
         {
@@ -46,34 +53,123 @@ public class FlyToPlugin : BasePlugin
             return;
         }
 
-        // Check if the player has a pawn
-        var playerPawn = player.PlayerPawn.Value;
+
+        // Get teammate name from command argument
         var teamMateName = commandInfo.GetArg(1);
-        bool playerFound = false;
+        var isRandom = false;
 
-        foreach (var eachPlayer in Utilities.GetPlayers())
+
+        // Check is teleport to yourself matched all character
+        if (player.PlayerName.ToLower() == teamMateName.ToLower())
         {
-            if (eachPlayer.IsValid && eachPlayer.PlayerPawn.IsValid &&
-                eachPlayer.PlayerName == teamMateName && eachPlayer.Team == CsTeam.CounterTerrorist)
+            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}You can not teleport to yourself");
+            return;
+        }
+
+        // ------- If User Enter @randomct, then get random ct player-------
+        if (teamMateName.ToLower() == "@randomct")
+        {
+
+            var ctPlayers = Utilities.GetPlayers().Where(p => p.Team == CsTeam.CounterTerrorist && p.PawnIsAlive).ToList();
+
+            // you already alone in the server
+            if (ctPlayers.Count == 1)
             {
-                var targetPlayerPawn = eachPlayer.PlayerPawn.Value;
-                var targetPlayerPosition = targetPlayerPawn?.AbsOrigin ?? new Vector(0);
-                var targetPlayerAngles = targetPlayerPawn?.AbsRotation ?? new QAngle(0);
+                player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}No Human players available to Teleport to.");
+                return;
+            }
 
-                var newPosition = new Vector(targetPlayerPosition.X, targetPlayerPosition.Y, targetPlayerPosition.Z + 20);
-                var newAngles = new QAngle(targetPlayerAngles.X, targetPlayerAngles.Y, targetPlayerAngles.Z);
+            if (ctPlayers.Count > 0 && ctPlayers.Count != 1)
+            {
+                var random = new Random();
+                var randomPlayer = ctPlayers[random.Next(ctPlayers.Count)];
+                teamMateName = randomPlayer.PlayerName;
+                isRandom = true;
 
-                playerPawn?.Teleport(newPosition, newAngles);
-                player.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to {ChatColors.Yellow}{teamMateName}");
-                playerFound = true;
-                break;
+                // Careful to Kaboom the server from here
+                while (teamMateName.ToLower() == player.PlayerName.ToLower())
+                {
+                    randomPlayer = ctPlayers[random.Next(ctPlayers.Count)];
+                    teamMateName = randomPlayer.PlayerName;
+                }
+
+            }
+
+            else
+            {
+                player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}No Human players available to Teleport to.");
+                return;
             }
         }
 
-        if (!playerFound)
+        // Find a valid teammate in the same team
+        int matchCount = 0;
+        CCSPlayerController? matchedPlayer = null;
+
+        // Loop through all players and check if the name contains the input substring (case-insensitive)
+        foreach (var p in Utilities.GetPlayers())
         {
-            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}Can not find '{ChatColors.Yellow}{teamMateName}{ChatColors.Default}'");
+
+            if (p is { IsValid: true, PlayerPawn.IsValid: true, Team: CsTeam.CounterTerrorist, PawnIsAlive: true})
+            {
+                var playerName = p.PlayerName;
+
+                // Check if the player's name contains the input string (case-insensitive)
+                if (playerName.Contains(teamMateName, StringComparison.OrdinalIgnoreCase)) // 
+                {
+                    matchCount++;
+
+                    // If more than 1 match is found and randomct is false, stop and notify the user
+                    if (matchCount > 1 && isRandom == false)
+                    {
+                        player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}More than one player matches '{ChatColors.Yellow}{teamMateName}{ChatColors.Default}'. Please specify further.");
+                        return;
+                    }
+
+                    matchedPlayer = p;
+
+                }
+            }
+
         }
+
+
+        if (matchCount == 1 && matchedPlayer != null && isRandom == false && matchedPlayer.PlayerName != player.PlayerName)
+        {
+            var targetPlayerPawn = matchedPlayer.PlayerPawn.Value;
+            var newPosition = new Vector(targetPlayerPawn?.AbsOrigin?.X, targetPlayerPawn?.AbsOrigin?.Y, targetPlayerPawn?.AbsOrigin?.Z + 20);
+            var newAngles = new QAngle(targetPlayerPawn?.AbsRotation?.X, targetPlayerPawn?.AbsRotation?.Y, targetPlayerPawn?.AbsRotation?.Z);
+
+            player.PlayerPawn.Value?.Teleport(newPosition, newAngles);
+            player.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to {ChatColors.Yellow}{matchedPlayer.PlayerName}");
+        }
+
+        else if (matchedPlayer?.PlayerName == player.PlayerName)
+        {
+            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}You can not teleport to yourself");
+        }
+
+        else if (matchCount == 0)
+        {
+            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}Cannot find '{ChatColors.Yellow}{commandInfo.GetArg(1)}{ChatColors.Default}'");
+        }
+
+        else if ((isRandom == true) && (teamMateName != player.PlayerName))
+        {
+            var targetPlayerPawn = matchedPlayer.PlayerPawn.Value;
+            var newPosition = new Vector(targetPlayerPawn?.AbsOrigin?.X, targetPlayerPawn?.AbsOrigin?.Y, targetPlayerPawn?.AbsOrigin?.Z + 20);
+            var newAngles = new QAngle(targetPlayerPawn?.AbsRotation?.X, targetPlayerPawn?.AbsRotation?.Y, targetPlayerPawn?.AbsRotation?.Z);
+
+            player.PlayerPawn.Value?.Teleport(newPosition, newAngles);
+            player.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to {ChatColors.Yellow}{matchedPlayer.PlayerName}");
+        }
+
+        else
+        {
+            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}You can not teleport to yourself");
+        }
+
+
     }
 
     private static bool CanUseFlyTo()
@@ -83,7 +179,7 @@ public class FlyToPlugin : BasePlugin
 
         if (mapName == "ze_immortal_flame")
         {
-            countDownZombieSpawn = 30;
+            countDownZombieSpawn = 500; // Time to wait for zombie spawn
         }
 
         // Get game rules safely
@@ -113,9 +209,8 @@ public class FlyToPlugin : BasePlugin
     }
 
     // TODO : 1 - Maybe Create the config file for each map zombie spawn timmer
-    // TODO : 2 - Add feature detact string expression for player name like Orin, Orian, if match more than 2 people
-    // TODO : 3 - Add feature to teleport random @ct player using !flyto @randomct
+    // TODO : 2 - Fix if there are Kianya and Karin if I type Ka only its gonna show 'More than one player matches' line 118
+    // TODO : 3 - Teleport to zombie massage
     // TODO : 4 - Add feature to teleport by using middle mouse button
-
 }
 
