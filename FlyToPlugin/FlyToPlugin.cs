@@ -14,6 +14,9 @@ public class FlyToPlugin : BasePlugin
     public override string ModuleAuthor => "Kianya";
     public override string ModuleDescription => "Command teleport to teammate within in specific time";
 
+    private const int DefaultZombieSpawnTime = 15;
+    private const int ImmortalFlameZombieSpawnTime = 500;
+
     public override void Load(bool hotReload)
     {
 
@@ -22,7 +25,7 @@ public class FlyToPlugin : BasePlugin
     }
 
     [ConsoleCommand("css_flyto", "Teleport to a teammate after a new round starts")]
-    [CommandHelper(minArgs: 1, usage: "Expect name of alive human player", whoCanExecute: CommandUsage.CLIENT_ONLY)]
+    [CommandHelper(minArgs: 1, usage: "Expect player name in alive human-side", whoCanExecute: CommandUsage.CLIENT_ONLY)]
     public void FlyToCommand(CCSPlayerController? player, CommandInfo commandInfo)
     {
         // Check if the player is valid
@@ -110,7 +113,7 @@ public class FlyToPlugin : BasePlugin
         foreach (var p in Utilities.GetPlayers())
         {
 
-            if (p is { IsValid: true, PlayerPawn.IsValid: true, Team: CsTeam.CounterTerrorist, PawnIsAlive: true})
+            if (p is { IsValid: true, PlayerPawn.IsValid: true, Team: CsTeam.CounterTerrorist, PawnIsAlive: true })
             {
                 var playerName = p.PlayerName;
 
@@ -174,13 +177,6 @@ public class FlyToPlugin : BasePlugin
 
     private static bool CanUseFlyTo()
     {
-        var mapName = Server.MapName;
-        var countDownZombieSpawn = 15;
-
-        if (mapName == "ze_immortal_flame")
-        {
-            countDownZombieSpawn = 500; // Time to wait for zombie spawn
-        }
 
         // Get game rules safely
         var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
@@ -195,21 +191,38 @@ public class FlyToPlugin : BasePlugin
         // Get time since round start
         var timeSinceRoundStart = (int)(gameRules.LastThinkTime - gameRules.RoundStartTime);
 
-        if (timeSinceRoundStart < countDownZombieSpawn)
+        if (Server.MapName == "ze_immortal_flame")
         {
-            return true;
+            if (timeSinceRoundStart < ImmortalFlameZombieSpawnTime)
+            {
+                return true;
+            }
+
+            if (timeSinceRoundStart > ImmortalFlameZombieSpawnTime)
+            {
+                return false;
+            }
         }
 
-        if (timeSinceRoundStart > countDownZombieSpawn)
+        else
         {
-            return false;
+            if (timeSinceRoundStart < DefaultZombieSpawnTime)
+            {
+                return true;
+            }
+
+            if (timeSinceRoundStart > DefaultZombieSpawnTime)
+            {
+                return false;
+            }
         }
 
         return false;
+
     }
 
     // TODO : 1 - Maybe Create the config file for each map zombie spawn timmer
-    // TODO : 2 - Fix if there are Kianya and Karin if I type Ka only its gonna show 'More than one player matches' line 118
+    // TODO : 2 - Fix if there are Kianya and Karin if I type Ka only its gonna show 'More than one player matches' instead go for Karin line 118
     // TODO : 3 - Teleport to zombie massage
     // TODO : 4 - Add feature to teleport by using middle mouse button
 }
