@@ -4,6 +4,8 @@ using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Utils;
+using Vector = CounterStrikeSharp.API.Modules.Utils.Vector;
+using QAngle = CounterStrikeSharp.API.Modules.Utils.QAngle;
 using System.Runtime.InteropServices;
 
 namespace FlyToPlugin;
