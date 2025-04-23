@@ -17,21 +17,24 @@ public class FlyToPlugin : BasePlugin
     public override string ModuleAuthor => "Kianya";
     public override string ModuleDescription => "Command teleport to teammate within in specific time";
 
-    private const int DefaultZombieSpawnTime = 15; // default map zombie spawn after 15 seconds
-    private const int MakoZombieSpawnTime = 30; // mako map zombie spawn after 30 seconds
+    private const int _defaultZombieSpawnTime = 15; // default map zombie spawn after 15 seconds
+    private const int _makoZombieSpawnTime = 30; // mako map zombie spawn after 30 seconds
+    private const int _warmUpTime = 120; // warmup round is 2 minutes
+    private bool _isWarmUp = false;
+    private string _mapName = string.Empty;
 
     public override void Load(bool hotReload)
     {
-
         RegisterEventHandler<EventPlayerPing>(OnPlayerPing);
-
+        RegisterEventHandler<EventRoundAnnounceWarmup>(OnEventWarmupRound);
+        RegisterEventHandler<EventWarmupEnd>(OnEventWarmUpEnd);
     }
 
     public override void Unload(bool hotReload)
     {
-
         DeregisterEventHandler<EventPlayerPing>(OnPlayerPing);
-
+        DeregisterEventHandler<EventRoundAnnounceWarmup>(OnEventWarmupRound);
+        DeregisterEventHandler<EventWarmupEnd>(OnEventWarmUpEnd);
     }
 
 
@@ -49,14 +52,14 @@ public class FlyToPlugin : BasePlugin
         // Check if the player is on the human side
         if (player.Team != CsTeam.CounterTerrorist)
         {
-            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}Only Human side can use this command.");
+            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}Only Human side can use this command");
             return;
         }
 
         // Check if the player is a alive human
         if (player.PawnIsAlive == false)
         {
-            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}You are not alive.");
+            player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}You are not alive to use this command");
             return;
         }
 
@@ -89,7 +92,7 @@ public class FlyToPlugin : BasePlugin
             // you already alone in the server
             if (ctPlayers.Count == 1)
             {
-                player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}No Human players available to Teleport to.");
+                player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}No Human players available to Teleport to");
                 return;
             }
 
@@ -111,7 +114,7 @@ public class FlyToPlugin : BasePlugin
 
             else
             {
-                player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}No Human players available to Teleport to.");
+                player.PrintToChat($" {ChatColors.Red}[FlyTo] {ChatColors.Default}No Human players available to Teleport to");
                 return;
             }
         }
@@ -186,7 +189,7 @@ public class FlyToPlugin : BasePlugin
 
     }
 
-    private static bool CanUseFlyTo()
+    private bool CanUseFlyTo()
     {
 
         // Get game rules safely
@@ -202,14 +205,29 @@ public class FlyToPlugin : BasePlugin
         // Get time since round start
         var timeSinceRoundStart = (int)(gameRules.LastThinkTime - gameRules.RoundStartTime);
 
-        if (Server.MapName == "ze_FFVII_Mako_Reactor_v5_3")
+        if (_mapName == "ze_ffvii_mako_reactor_v5_3")
         {
-            if (timeSinceRoundStart < MakoZombieSpawnTime)
+            // Check Warmup Round
+            if (_isWarmUp == true)
+            {
+                if (timeSinceRoundStart < _warmUpTime)
+                {
+                    return true;
+                }
+
+                if (timeSinceRoundStart > _warmUpTime)
+                {
+                    return false;
+                }
+
+            }
+
+            if (timeSinceRoundStart < _makoZombieSpawnTime)
             {
                 return true;
             }
 
-            if (timeSinceRoundStart > MakoZombieSpawnTime)
+            if (timeSinceRoundStart > _makoZombieSpawnTime)
             {
                 return false;
             }
@@ -217,12 +235,27 @@ public class FlyToPlugin : BasePlugin
 
         else
         {
-            if (timeSinceRoundStart < DefaultZombieSpawnTime)
+            // Check Warmup Round
+            if (_isWarmUp == true)
+            {
+                if (timeSinceRoundStart < _warmUpTime)
+                {
+                    return true;
+                }
+
+                if (timeSinceRoundStart > _warmUpTime)
+                {
+                    return false;
+                }
+
+            }
+
+            if (timeSinceRoundStart < _defaultZombieSpawnTime)
             {
                 return true;
             }
 
-            if (timeSinceRoundStart > DefaultZombieSpawnTime)
+            if (timeSinceRoundStart > _defaultZombieSpawnTime)
             {
                 return false;
             }
@@ -259,13 +292,30 @@ public class FlyToPlugin : BasePlugin
                 var newAngles = entity.AbsRotation;
 
                 playerping.PlayerPawn.Value?.Teleport(newPosition, newAngles);
-                playerping.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleport you to your aimed teammate");
+                playerping.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to your aimed teammate");
             }
         }
 
 
         return HookResult.Continue;
     }
+
+    public HookResult OnEventWarmupRound(EventRoundAnnounceWarmup @event, GameEventInfo info)
+    {
+        _isWarmUp = true; // if warmup round 
+        _mapName = Server.MapName;
+
+        return HookResult.Continue;
+    }
+
+    public HookResult OnEventWarmUpEnd(EventWarmupEnd @event, GameEventInfo info)
+    {
+        _isWarmUp = false; 
+
+        return HookResult.Continue;
+    }
+
+
 
     public static CBaseEntity? GetClientAimTarget(CCSPlayerController player)
     {
@@ -286,7 +336,6 @@ public class FlyToPlugin : BasePlugin
 
     // TODO : 1 - Maybe Create the config file for each map zombie spawn timmer
     // TODO : 2 - Fix if there are Kianya and Karin if I type Ka only its gonna show 'More than one player matches' instead go for Karin line 118
-    // TODO : 3 - Teleport to zombie massage
-    // TODO : 4 - Add feature to teleport by using middle mouse button
+
 }
 
