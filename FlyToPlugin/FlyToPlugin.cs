@@ -25,16 +25,22 @@ public class FlyToPlugin : BasePlugin
 
     public override void Load(bool hotReload)
     {
-        RegisterEventHandler<EventPlayerPing>(OnPlayerPing);
+        //RegisterEventHandler<EventPlayerPing>(OnPlayerPing);
         RegisterEventHandler<EventRoundAnnounceWarmup>(OnEventWarmupRound);
         RegisterEventHandler<EventWarmupEnd>(OnEventWarmUpEnd);
+        RegisterEventHandler<EventRoundStart>(OnroundStart);
+
+        AddCommandListener("player_ping", CommandListener_Ping);
     }
 
     public override void Unload(bool hotReload)
     {
-        DeregisterEventHandler<EventPlayerPing>(OnPlayerPing);
+        //DeregisterEventHandler<EventPlayerPing>(OnPlayerPing);
         DeregisterEventHandler<EventRoundAnnounceWarmup>(OnEventWarmupRound);
         DeregisterEventHandler<EventWarmupEnd>(OnEventWarmUpEnd);
+        DeregisterEventHandler<EventRoundStart>(OnroundStart);
+
+        RemoveCommandListener("player_ping", CommandListener_Ping, HookMode.Pre);
     }
 
 
@@ -265,39 +271,74 @@ public class FlyToPlugin : BasePlugin
 
     }
 
-    public HookResult OnPlayerPing(EventPlayerPing? @eventPlayerPing, GameEventInfo info)
+    //public HookResult OnPlayerPing(EventPlayerPing? @eventPlayerPing, GameEventInfo info)
+    //{
+
+    //    // Get the player who triggered the ping
+
+    //    if (@eventPlayerPing?.Userid == null || !@eventPlayerPing.Userid.IsValid || @eventPlayerPing.Userid.Team != CsTeam.CounterTerrorist)
+    //    {
+    //        return HookResult.Continue;
+    //    }
+
+    //    var playerping = @eventPlayerPing.Userid;
+
+    //    if (CanUseFlyTo() == false)
+    //    {
+    //        return HookResult.Continue;
+    //    }
+
+    //    if (playerping != null)
+    //    {
+    //        var entity = GetClientAimTarget(playerping);
+
+    //        if (entity != null && entity.DesignerName.ToLower().Contains("player"))
+    //        {
+    //            var newPosition = entity.AbsOrigin;
+    //            var newAngles = entity.AbsRotation;
+
+    //            playerping.PlayerPawn.Value?.Teleport(newPosition, newAngles);
+    //            playerping.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to your aimed teammate");
+    //        }
+    //    }
+
+
+    //    return HookResult.Handled;
+    //}
+
+    private HookResult CommandListener_Ping(CCSPlayerController? player, CommandInfo info)
     {
-
         // Get the player who triggered the ping
-
-        if (@eventPlayerPing?.Userid == null || !@eventPlayerPing.Userid.IsValid || @eventPlayerPing.Userid.Team != CsTeam.CounterTerrorist)
+        if (player == null || player.UserId == null || !player.IsValid)
         {
             return HookResult.Continue;
         }
 
-        var playerping = @eventPlayerPing.Userid;
+        if (player.Team != CsTeam.CounterTerrorist)
+        {
+            return HookResult.Continue; // remove ping from zombie side
+        }
 
         if (CanUseFlyTo() == false)
         {
-            return HookResult.Continue;
+            return HookResult.Continue; // remove ping from human side
         }
 
-        if (playerping != null)
+        if (player != null)
         {
-            var entity = GetClientAimTarget(playerping);
+            var entity = GetClientAimTarget(player);
 
             if (entity != null && entity.DesignerName.ToLower().Contains("player"))
             {
                 var newPosition = entity.AbsOrigin;
-                var newAngles = entity.AbsRotation;
+                var newAngles = player.AbsRotation; // entity.AbsRotation; now use player angle
 
-                playerping.PlayerPawn.Value?.Teleport(newPosition, newAngles);
-                playerping.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to your aimed teammate");
+                player.PlayerPawn.Value?.Teleport(newPosition, newAngles);
+                player.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to your aimed teammate");
             }
         }
 
-
-        return HookResult.Continue;
+        return HookResult.Handled; // remove ping from when its available to use only
     }
 
     public HookResult OnEventWarmupRound(EventRoundAnnounceWarmup @event, GameEventInfo info)
@@ -315,6 +356,20 @@ public class FlyToPlugin : BasePlugin
         return HookResult.Continue;
     }
 
+    public HookResult OnroundStart(EventRoundStart @event, GameEventInfo info)
+    {
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        if (gameRulesProxy?.GameRules == null) return HookResult.Continue;
+
+        var gameRules = gameRulesProxy.GameRules;
+
+        if (gameRules.WarmupPeriod == false)
+        {
+            _isWarmUp = false;
+        }
+
+        return HookResult.Continue;
+    }
 
 
     public static CBaseEntity? GetClientAimTarget(CCSPlayerController player)
