@@ -10,35 +10,36 @@ using System.Runtime.InteropServices;
 
 namespace FlyToPlugin;
 
-public class FlyToPlugin : BasePlugin
+public class FlyToPlugin : BasePlugin, IPluginConfig<Config>
 {
     public override string ModuleName => "FlyToPlugin";
     public override string ModuleVersion => "1.0.0";
     public override string ModuleAuthor => "Kianya";
     public override string ModuleDescription => "Command teleport to teammate within in specific time";
 
-    private const int _defaultZombieSpawnTime = 15; // default map zombie spawn after 15 seconds
-    private const int _makoZombieSpawnTime = 30; // mako map zombie spawn after 30 seconds
-    private const int _warmUpTime = 120; // warmup round is 2 minutes
+    //private const int _defaultZombieSpawnTime = 15; // default map zombie spawn after 15 seconds
+    //private const int _makoZombieSpawnTime = 30; // mako map zombie spawn after 30 seconds
+    //private const int _warmUpTime = 120; // warmup round is 2 minutes
     private bool _isWarmUp = false;
     private string _mapName = string.Empty;
+
+    public Config Config { get; set; } = new Config();
+    public void OnConfigParsed(Config config) => Config = config;
+
+
 
     public override void Load(bool hotReload)
     {
         //RegisterEventHandler<EventPlayerPing>(OnPlayerPing);
-        RegisterEventHandler<EventRoundAnnounceWarmup>(OnEventWarmupRound);
-        RegisterEventHandler<EventWarmupEnd>(OnEventWarmUpEnd);
-        RegisterEventHandler<EventRoundStart>(OnroundStart);
-
+        RegisterEventHandler<EventRoundStart>(OnEventRoundStart);
         AddCommandListener("player_ping", CommandListener_Ping);
+
     }
 
     public override void Unload(bool hotReload)
     {
         //DeregisterEventHandler<EventPlayerPing>(OnPlayerPing);
-        DeregisterEventHandler<EventRoundAnnounceWarmup>(OnEventWarmupRound);
-        DeregisterEventHandler<EventWarmupEnd>(OnEventWarmUpEnd);
-        DeregisterEventHandler<EventRoundStart>(OnroundStart);
+        DeregisterEventHandler<EventRoundStart>(OnEventRoundStart);
 
         RemoveCommandListener("player_ping", CommandListener_Ping, HookMode.Pre);
     }
@@ -216,24 +217,24 @@ public class FlyToPlugin : BasePlugin
             // Check Warmup Round
             if (_isWarmUp == true)
             {
-                if (timeSinceRoundStart < _warmUpTime)
+                if (timeSinceRoundStart < Config._warmUpTime)
                 {
                     return true;
                 }
 
-                if (timeSinceRoundStart > _warmUpTime)
+                if (timeSinceRoundStart > Config._warmUpTime)
                 {
                     return false;
                 }
 
             }
 
-            if (timeSinceRoundStart < _makoZombieSpawnTime)
+            if (timeSinceRoundStart < Config._makoZombieSpawnTime)
             {
                 return true;
             }
 
-            if (timeSinceRoundStart > _makoZombieSpawnTime)
+            if (timeSinceRoundStart > Config._makoZombieSpawnTime)
             {
                 return false;
             }
@@ -244,24 +245,24 @@ public class FlyToPlugin : BasePlugin
             // Check Warmup Round
             if (_isWarmUp == true)
             {
-                if (timeSinceRoundStart < _warmUpTime)
+                if (timeSinceRoundStart < Config._warmUpTime)
                 {
                     return true;
                 }
 
-                if (timeSinceRoundStart > _warmUpTime)
+                if (timeSinceRoundStart > Config._warmUpTime)
                 {
                     return false;
                 }
 
             }
 
-            if (timeSinceRoundStart < _defaultZombieSpawnTime)
+            if (timeSinceRoundStart < Config._defaultZombieSpawnTime)
             {
                 return true;
             }
 
-            if (timeSinceRoundStart > _defaultZombieSpawnTime)
+            if (timeSinceRoundStart > Config._defaultZombieSpawnTime)
             {
                 return false;
             }
@@ -271,42 +272,7 @@ public class FlyToPlugin : BasePlugin
 
     }
 
-    //public HookResult OnPlayerPing(EventPlayerPing? @eventPlayerPing, GameEventInfo info)
-    //{
-
-    //    // Get the player who triggered the ping
-
-    //    if (@eventPlayerPing?.Userid == null || !@eventPlayerPing.Userid.IsValid || @eventPlayerPing.Userid.Team != CsTeam.CounterTerrorist)
-    //    {
-    //        return HookResult.Continue;
-    //    }
-
-    //    var playerping = @eventPlayerPing.Userid;
-
-    //    if (CanUseFlyTo() == false)
-    //    {
-    //        return HookResult.Continue;
-    //    }
-
-    //    if (playerping != null)
-    //    {
-    //        var entity = GetClientAimTarget(playerping);
-
-    //        if (entity != null && entity.DesignerName.ToLower().Contains("player"))
-    //        {
-    //            var newPosition = entity.AbsOrigin;
-    //            var newAngles = entity.AbsRotation;
-
-    //            playerping.PlayerPawn.Value?.Teleport(newPosition, newAngles);
-    //            playerping.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to your aimed teammate");
-    //        }
-    //    }
-
-
-    //    return HookResult.Handled;
-    //}
-
-    private HookResult CommandListener_Ping(CCSPlayerController? player, CommandInfo info)
+    private HookResult CommandListener_Ping(CCSPlayerController player, CommandInfo info)
     {
         // Get the player who triggered the ping
         if (player == null || player.UserId == null || !player.IsValid)
@@ -331,9 +297,11 @@ public class FlyToPlugin : BasePlugin
             if (entity != null && entity.DesignerName.ToLower().Contains("player"))
             {
                 var newPosition = entity.AbsOrigin;
-                var newAngles = player.AbsRotation; // entity.AbsRotation; now use player angle
+                //var newAngle = entity.AbsRotation;
+                QAngle currentViewAngle = player.PlayerPawn.Value!.AbsRotation!;
 
-                player.PlayerPawn.Value?.Teleport(newPosition, newAngles);
+                player.PlayerPawn.Value?.Teleport(newPosition, currentViewAngle);
+
                 player.PrintToChat($" {ChatColors.Green}[FlyTo] {ChatColors.Default}Teleported you to your aimed teammate");
             }
         }
@@ -341,36 +309,34 @@ public class FlyToPlugin : BasePlugin
         return HookResult.Handled; // remove ping from when its available to use only
     }
 
-    public HookResult OnEventWarmupRound(EventRoundAnnounceWarmup @event, GameEventInfo info)
-    {
-        _isWarmUp = true; // if warmup round 
-        _mapName = Server.MapName;
+    //public static Vector GetEyePosition(CCSPlayerController player)
+    //{
+    //    Vector absorigin = player.PlayerPawn.Value!.AbsOrigin!;
+    //    CPlayer_CameraServices camera = player.PlayerPawn.Value!.CameraServices!;
 
-        return HookResult.Continue;
-    }
+    //    return new Vector(absorigin.X, absorigin.Y, absorigin.Z + camera.OldPlayerViewOffsetZ);
+    //}
 
-    public HookResult OnEventWarmUpEnd(EventWarmupEnd @event, GameEventInfo info)
-    {
-        _isWarmUp = false; 
-
-        return HookResult.Continue;
-    }
-
-    public HookResult OnroundStart(EventRoundStart @event, GameEventInfo info)
+    public HookResult OnEventRoundStart(EventRoundStart @event, GameEventInfo info)
     {
         var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
         if (gameRulesProxy?.GameRules == null) return HookResult.Continue;
 
         var gameRules = gameRulesProxy.GameRules;
 
-        if (gameRules.WarmupPeriod == false)
+        if (gameRules.WarmupPeriod == true)
+        {
+            _isWarmUp = true;
+            _mapName = Server.MapName;
+        }
+
+        else
         {
             _isWarmUp = false;
         }
 
         return HookResult.Continue;
     }
-
 
     public static CBaseEntity? GetClientAimTarget(CCSPlayerController player)
     {
