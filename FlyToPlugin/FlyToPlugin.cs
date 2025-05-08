@@ -161,7 +161,7 @@ public class FlyToPlugin : BasePlugin, IPluginConfig<Config>
         if (matchCount == 1 && matchedPlayer != null && isRandom == false && matchedPlayer.PlayerName != player.PlayerName)
         {
             var targetPlayerPawn = matchedPlayer.PlayerPawn.Value;
-            var newPosition = new Vector(targetPlayerPawn?.AbsOrigin?.X, targetPlayerPawn?.AbsOrigin?.Y, targetPlayerPawn?.AbsOrigin?.Z + 20);
+            var newPosition = new Vector(targetPlayerPawn?.AbsOrigin?.X, targetPlayerPawn?.AbsOrigin?.Y, targetPlayerPawn?.AbsOrigin?.Z);
             var newAngles = new QAngle(targetPlayerPawn?.AbsRotation?.X, targetPlayerPawn?.AbsRotation?.Y, targetPlayerPawn?.AbsRotation?.Z);
 
             player.PlayerPawn.Value?.Teleport(newPosition, newAngles);
@@ -181,7 +181,7 @@ public class FlyToPlugin : BasePlugin, IPluginConfig<Config>
         else if ((isRandom == true) && (teamMateName != player.PlayerName))
         {
             var targetPlayerPawn = matchedPlayer.PlayerPawn.Value;
-            var newPosition = new Vector(targetPlayerPawn?.AbsOrigin?.X, targetPlayerPawn?.AbsOrigin?.Y, targetPlayerPawn?.AbsOrigin?.Z + 20);
+            var newPosition = new Vector(targetPlayerPawn?.AbsOrigin?.X, targetPlayerPawn?.AbsOrigin?.Y, targetPlayerPawn?.AbsOrigin?.Z);
             var newAngles = new QAngle(targetPlayerPawn?.AbsRotation?.X, targetPlayerPawn?.AbsRotation?.Y, targetPlayerPawn?.AbsRotation?.Z);
 
             player.PlayerPawn.Value?.Teleport(newPosition, newAngles);
@@ -285,6 +285,12 @@ public class FlyToPlugin : BasePlugin, IPluginConfig<Config>
             return HookResult.Continue; // remove ping from zombie side
         }
 
+        // TODO : until find the way to fix player teleport outside train
+        //if (_mapName == "ze_ffvii_mako_reactor_v5_3")
+        //{
+        //    return HookResult.Continue; // disable ping tp from map mako
+        //}
+
         if (CanUseFlyTo() == false)
         {
             return HookResult.Continue; // remove ping from human side
@@ -294,9 +300,15 @@ public class FlyToPlugin : BasePlugin, IPluginConfig<Config>
         {
             var entity = GetClientAimTarget(player);
 
-            if (entity != null && entity.DesignerName.ToLower().Contains("player"))
+            if (entity != null && entity.IsValid && entity.DesignerName.ToLower().Contains("player"))
             {
-                var newPosition = entity.AbsOrigin;
+                if (entity.As<CCSPlayerController>().Team != CsTeam.CounterTerrorist || !entity.As<CCSPlayerController>().PawnIsAlive)
+                {
+                    return HookResult.Continue;
+                }
+
+
+                var newPosition = entity.As<CCSPlayerController>().AbsOrigin;
                 //var newAngle = entity.AbsRotation;
                 QAngle currentViewAngle = player.PlayerPawn.Value!.AbsRotation!;
 
